@@ -47,6 +47,9 @@ def handle_args(sys_args):
     if sys_args.verbose is not False:
         sys_args.verbose = True
 
+    if not sys_args.configfile:
+        sys_args.configfile = 'system'
+
     if sys_args.cmd:
         cmd = Command(sys_args.cmd)
         if cmd.returncode != 0:
@@ -187,6 +190,35 @@ class Command:
         os.remove(errfile)
 
 
+def sendmail_via_smtp(emailto, subj, msg, sysargs):
+    import ConfigParser
+    from smtplib import SMTP
+    import email
+    default_configvalues = {'use_sendmailfallback': False,
+                            'sendmail_path': '/usr/sbin/sendmail',
+                            'loglevel': 'logging.ERROR'}
+    #import pdb; pdb.set_trace()
+    try:
+        cfg = ConfigParser.SafeConfigParser(defaults=default_configvalues)
+        #fname = os.path.realpath(configpath)
+        cfg.read(sysargs.configfile)
+        emailMsg = email.MIMEMultipart.MIMEMultipart('mixed')
+        emailMsg['From'] = cfg.get('Mail', 'fromaddr')
+        emailMsg['To'] = emailto
+        emailMsg['Subject'] = subj.replace('"', "'")
+        emailMsg.attach(email.mime.Text.MIMEText(msg, _charset='utf-8'))
+        smtp = SMTP()
+        smtp.set_debuglevel(8)
+        smtp.connect( cfg.get('Mail', 'smtpserver'), cfg.get('Mail', 'smtpport') )
+        smtp.starttls()
+        smtp.login( cfg.get('Mail','user'), cfg.get('Mail','pass') ) 
+        smtp.sendmail(emailMsg['From'], emailMsg['To'], emailMsg.as_string())
+        smtp.close()
+        smtp.quit()
+    except Exception as e:
+        print "unforeseen error: %s" %str(e)
+
+
 def send_email(sys_args, emails, subject, message):
     """Sends an email via `mail`."""
     emails = emails.split(',')
@@ -198,18 +230,21 @@ def send_email(sys_args, emails, subject, message):
 
     try:
         for email in emails:
-            cmd = Command('mail -s "%s" %s < %s' %
-                          (subject.replace('"', "'"),
-                           email,
-                           err_report)
-                          )
-
-            if sys_args.verbose:
-                if cmd.returncode == 0:
-                    print 'Sent an email to %s' % email
-                else:
-                    print 'Could not send an email to %s' % email
-                    print trim_if_needed(cmd.stderr)
+            if sys_args.configfile == 'system':
+                cmd = Command('mail -s "%s" %s < %s' %
+                              (subject.replace('"', "'"),
+                               email,
+                               err_report)
+                              )
+                if sys_args.verbose:
+                    if cmd.returncode == 0:
+                        print 'Sent an email to %s' % email
+                    else:
+                        print 'Could not send an email to %s' % email
+                        print trim_if_needed(cmd.stderr)
+            else:
+                # print "here code execution to send via smtplib"
+                sendmail_via_smtp(email, subject, message, sys_args)
     finally:
         os.remove(err_report)
 
@@ -261,5 +296,9 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--verbose',
                         nargs='?', default=False,
                         help='Will send an email / print to stdout on successful run.')
+ 
+    parser.add_argument('-f', '--configfile',
+                        nargs='?', default=False,
+                        help='Path to configgile with smtp connection details.')
 
     handle_args(parser.parse_args())

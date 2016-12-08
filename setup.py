@@ -65,6 +65,8 @@ Basic example of usage::
                                 `-t 2h`,`-t 2m`, `-t 30s`.
           -v [VERBOSE], --verbose [VERBOSE]
                                 Will send an email / print to stdout on successful run.
+          -f, --config [CONFIG] 
+                                path to config file with external smtp connection details
 
 
     ##Will send out a timeout alert to cron@my_domain.com:
@@ -78,4 +80,8 @@ Basic example of usage::
 
     #Will send a successful report to cron@my_domain.com:
     $ cronwrap -c "ls" -e cron@my_domain.com -v
+
+    #Will send email via external smtp server: (omit -f and cronwrap works with local sendmail)
+    $ cronwrap -e "test12s78s@mailinator.com" -c "sleep 2s" -t 1s -v -f /projects/cronwrap/cronwrap/cronwrap.ini
+
 """)
